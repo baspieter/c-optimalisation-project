@@ -94,6 +94,7 @@ using namespace Tmpl8;
 #include "particle_beam.h"
 #include "cell.h"
 #include "check_tank_collision.h"
+#include "sort_by_tank_health.h"
 
 #include "game.h"
 

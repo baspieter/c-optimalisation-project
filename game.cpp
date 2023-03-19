@@ -361,43 +361,19 @@ void Game::draw()
         const int NUM_TANKS = ((t < 1) ? num_tanks_blue : num_tanks_red);
 
         const int begin = ((t < 1) ? 0 : num_tanks_blue);
-        std::vector<const Tank*> sorted_tanks;
-        insertion_sort_tanks_health(tanks, sorted_tanks, begin, begin + NUM_TANKS);
-        sorted_tanks.erase(std::remove_if(sorted_tanks.begin(), sorted_tanks.end(), [](const Tank* tank) { return !tank->active; }), sorted_tanks.end());
 
+        vector<const Tank*> sorted_tanks;
+        sorted_tanks.reserve(num_tanks_blue + num_tanks_red);
+        vector<Tank>::iterator begin_it = (tanks.begin() + begin);
+        vector<Tank>::iterator end_it = (tanks.begin() + NUM_TANKS);
+
+
+        transform(begin_it, end_it, back_inserter(sorted_tanks), getPointer);
+
+        Quicksort(sorted_tanks, begin, begin + NUM_TANKS);
+        //// Todo: Regel hieronder verwijderd inactieve tanks, maakt dat de health bar niet kapot?
+        ////sorted_tanks.erase(std::remove_if(sorted_tanks.begin(), sorted_tanks.end(), [](Tank tank) { return !tank.active; }), sorted_tanks.end());
         draw_health_bars(sorted_tanks, t);
-    }
-}
-
-// -----------------------------------------------------------
-// Sort tanks by health value using insertion sort
-// -----------------------------------------------------------
-void Tmpl8::Game::insertion_sort_tanks_health(const std::vector<Tank>& original, std::vector<const Tank*>& sorted_tanks, int begin, int end)
-{
-    const int NUM_TANKS = end - begin;
-    sorted_tanks.reserve(NUM_TANKS);
-    sorted_tanks.emplace_back(&original.at(begin));
-
-    for (int i = begin + 1; i < (begin + NUM_TANKS); i++)
-    {
-        const Tank& current_tank = original.at(i);
-
-        for (int s = (int)sorted_tanks.size() - 1; s >= 0; s--)
-        {
-            const Tank* current_checking_tank = sorted_tanks.at(s);
-
-            if ((current_checking_tank->compare_health(current_tank) <= 0))
-            {
-                sorted_tanks.insert(1 + sorted_tanks.begin() + s, &current_tank);
-                break;
-            }
-
-            if (s == 0)
-            {
-                sorted_tanks.insert(sorted_tanks.begin(), &current_tank);
-                break;
-            }
-        }
     }
 }
 
