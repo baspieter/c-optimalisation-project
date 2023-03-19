@@ -10,7 +10,10 @@
 
 #define HEALTHBAR_OFFSET 70
 #define SCRWIDTH (1280 + (HEALTHBAR_OFFSET * 2))
+#define SCHRWIDT_WITHOUT_HEALTHBAR 1280
 #define SCRHEIGHT 720
+#define CELL_WIDTH 128
+#define CELL_HEIGHT 72
 
 // #define FULLSCREEN
 // #define ADVANCEDGL	// faster if your system supports it
@@ -89,6 +92,8 @@ using namespace Tmpl8;
 #include "smoke.h"
 #include "explosion.h"
 #include "particle_beam.h"
+#include "cell.h"
+#include "check_tank_collision.h"
 
 #include "game.h"
 

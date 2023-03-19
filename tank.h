@@ -13,7 +13,7 @@ enum allignments
 class Tank
 {
   public:
-    Tank(float pos_x, float pos_y, allignments allignment, Sprite* tank_sprite, Sprite* smoke_sprite, float tar_x, float tar_y, float collision_radius, int health, float max_speed);
+    Tank(int index, int cell_index, float pos_x, float pos_y, allignments allignment, Sprite* tank_sprite, Sprite* smoke_sprite, float tar_x, float tar_y, float collision_radius, int health, float max_speed);
 
     ~Tank();
 
@@ -48,6 +48,8 @@ class Tank
 
     float max_speed;
     float reload_time;
+    int index;
+    int cell_index;
 
     bool reloaded;
     bool active;
