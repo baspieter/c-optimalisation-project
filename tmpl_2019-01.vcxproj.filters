@@ -16,7 +16,6 @@
     <ClCompile Include="terrain.cpp" />
     <ClCompile Include="Cell.cpp" />
     <ClCompile Include="check_tank_collision.cpp" />
-    <ClCompile Include="sort_by_tank_health.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h" />
@@ -36,7 +35,6 @@
     <ClInclude Include="terrain.h" />
     <ClInclude Include="Cell.h" />
     <ClInclude Include="check_tank_collision.h" />
-    <ClInclude Include="sort_by_tank_health.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template code">
