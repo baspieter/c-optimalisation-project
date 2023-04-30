@@ -42,7 +42,7 @@ namespace Tmpl8
 
         cell.tank_indices.erase(remove_if(cell.tank_indices.begin(), cell.tank_indices.end(), [tank](int tank_index) { return tank.index == tank_index; }), cell.tank_indices.end());
 
-        Cell* new_cell = Cell::find_cell_for_tank(tank_col, tank_row, cells);
+        Cell* new_cell = Cell::find_cell_for_tank(tank.position.x, tank.position.y, cells);
         tank.cell_index = new_cell->index;
         new_cell->tank_indices.push_back(tank.index);
     }

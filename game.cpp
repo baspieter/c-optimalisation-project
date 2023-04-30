@@ -1,7 +1,8 @@
 #include "precomp.h" // include (only) this in every .cpp file
+#include <ranges>
 
-constexpr auto num_tanks_blue = 2048;
-constexpr auto num_tanks_red = 2048;
+constexpr auto num_tanks_blue = 20; //2048
+constexpr auto num_tanks_red = 20;
 
 constexpr auto tank_max_health = 1000;
 constexpr auto rocket_hit_value = 60;
@@ -13,11 +14,14 @@ constexpr auto health_bar_width = 70;
 
 constexpr auto max_frames = 2000;
 
+// Game order: Init > Tick > Update > Draw
+
 //Global performance timer
 // Start: 5.23m, speedup 0.4, 323866
-// Grid collision: 3.18m, speedup 1.6, 198961
+// Grid collision: 4.40m, speedup 1.2, 280300
+// Quick sort: 4.41m, speedup 1.0, 281855
 
-constexpr auto REF_PERFORMANCE = 198961; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
+constexpr auto REF_PERFORMANCE = 280300; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
 static timer perf_timer;
 static float duration;
 
@@ -71,8 +75,7 @@ void Game::init()
         int tank_index = i;
         vec2 position{ start_blue_x + ((i % max_rows) * spacing), start_blue_y + ((i / max_rows) * spacing) };
         Cell* tank_cell = Cell::find_cell_for_tank(position.x, position.y, cells);
-        Tank tank = Tank(tank_index, tank_cell->index, position.x, position.y, BLUE, &tank_blue, &smoke, 1100.f, position.y + 16, tank_radius, tank_max_health, tank_max_speed);
-        tanks.push_back(tank);
+        tanks.push_back(Tank(tank_index, tank_cell->index, position.x, position.y, BLUE, &tank_blue, &smoke, 1100.f, position.y + 16, tank_radius, tank_max_health, tank_max_speed));
         tank_cell->tank_indices.push_back(tank_index);
     }
 
@@ -82,10 +85,10 @@ void Game::init()
         int tank_index = num_tanks_blue + i;
         vec2 position{ start_red_x + ((i % max_rows) * spacing), start_red_y + ((i / max_rows) * spacing) };
         Cell* tank_cell = Cell::find_cell_for_tank(position.x, position.y, cells);
-        Tank tank = Tank(tank_index, tank_cell->index, position.x, position.y, RED, &tank_red, &smoke, 100.f, position.y + 16, tank_radius, tank_max_health, tank_max_speed);
-        tanks.push_back(tank);
+        tanks.push_back(Tank(tank_index, tank_cell->index, position.x, position.y, RED, &tank_red, &smoke, 100.f, position.y + 16, tank_radius, tank_max_health, tank_max_speed));
         tank_cell->tank_indices.push_back(tank_index);
     }
+
 
     particle_beams.push_back(Particle_beam(vec2(590, 327), vec2(100, 50), &particle_beam_sprite, particle_beam_hit_value));
     particle_beams.push_back(Particle_beam(vec2(64, 64), vec2(100, 50), &particle_beam_sprite, particle_beam_hit_value));
@@ -149,6 +152,7 @@ void Game::update(float deltaTime)
     }
 
     //Update tanks
+
     for (Tank& tank : tanks)
     {
         if (tank.active)
@@ -159,7 +163,7 @@ void Game::update(float deltaTime)
             // Check if tank is still in the right cell. If not, update it.
             Cell::check_or_update_cell(tank, cells, tanks);
 
-            //// Check if tank collided with tanks in surrounding cells, if so, nudge away.
+            // Check if tank collided with tanks in surrounding cells, if so, nudge away.
             check_tank_collision(tank, tanks, cells);
 
             //Shoot at closest target if reloaded
@@ -183,22 +187,19 @@ void Game::update(float deltaTime)
     //Calculate "forcefield" around active tanks
     forcefield_hull.clear();
 
-    //Find first active tank (this loop is a bit disgusting, fix?)
-    int first_active = 0;
-    for (Tank& tank : tanks)
-    {
-        if (tank.active)
-        {
-            break;
-        }
-        first_active++;
-    }
-    vec2 point_on_hull = tanks.at(first_active).position;
+    vec2 point_on_hull;
+    bool point_on_hull_assigned = false;
+
     //Find left most tank position
     for (Tank& tank : tanks)
     {
         if (tank.active)
         {
+            if (!point_on_hull_assigned) {
+                point_on_hull = tank.position;
+                point_on_hull_assigned = true;
+            }
+
             if (tank.position.x <= point_on_hull.x)
             {
                 point_on_hull = tank.position;
@@ -212,7 +213,7 @@ void Game::update(float deltaTime)
         if (tank.active)
         {
             forcefield_hull.push_back(point_on_hull);
-            vec2 endpoint = tanks.at(first_active).position;
+            vec2 endpoint = point_on_hull;
 
             for (Tank& tank : tanks)
             {
@@ -277,6 +278,7 @@ void Game::update(float deltaTime)
 
     //Remove exploded rockets with remove erase idiom
     rockets.erase(std::remove_if(rockets.begin(), rockets.end(), [](const Rocket& rocket) { return !rocket.active; }), rockets.end());
+
 
     //Update particle beams
     for (Particle_beam& particle_beam : particle_beams)
@@ -356,55 +358,33 @@ void Game::draw()
     }
 
     //Draw sorted health bars
-    for (int t = 0; t < 2; t++)
+    vector<int> team_healths;
+    team_healths.reserve(num_tanks_blue);
+    for (int team = 0; team < 2; team++)
     {
-        const int NUM_TANKS = ((t < 1) ? num_tanks_blue : num_tanks_red);
+        team_healths.clear();
 
-        const int begin = ((t < 1) ? 0 : num_tanks_blue);
-        std::vector<const Tank*> sorted_tanks;
-        insertion_sort_tanks_health(tanks, sorted_tanks, begin, begin + NUM_TANKS);
-        sorted_tanks.erase(std::remove_if(sorted_tanks.begin(), sorted_tanks.end(), [](const Tank* tank) { return !tank->active; }), sorted_tanks.end());
-
-        draw_health_bars(sorted_tanks, t);
-    }
-}
-
-// -----------------------------------------------------------
-// Sort tanks by health value using insertion sort
-// -----------------------------------------------------------
-void Tmpl8::Game::insertion_sort_tanks_health(const std::vector<Tank>& original, std::vector<const Tank*>& sorted_tanks, int begin, int end)
-{
-    const int NUM_TANKS = end - begin;
-    sorted_tanks.reserve(NUM_TANKS);
-    sorted_tanks.emplace_back(&original.at(begin));
-
-    for (int i = begin + 1; i < (begin + NUM_TANKS); i++)
-    {
-        const Tank& current_tank = original.at(i);
-
-        for (int s = (int)sorted_tanks.size() - 1; s >= 0; s--)
-        {
-            const Tank* current_checking_tank = sorted_tanks.at(s);
-
-            if ((current_checking_tank->compare_health(current_tank) <= 0))
-            {
-                sorted_tanks.insert(1 + sorted_tanks.begin() + s, &current_tank);
-                break;
-            }
-
-            if (s == 0)
-            {
-                sorted_tanks.insert(sorted_tanks.begin(), &current_tank);
-                break;
+        if (team == 0) {
+            for (auto it = tanks.begin(); it != tanks.begin() + num_tanks_blue; ++it) {
+                if (it->active) { team_healths.emplace_back(it->health); }
             }
         }
+        else {
+            for (auto it = tanks.begin() + num_tanks_blue; it != tanks.end(); ++it) {
+                if (it->active) { team_healths.emplace_back(it->health); }
+            }
+        }
+
+
+        sort_tanks_by_health(team_healths, 0, team_healths.size() - 1);
+        draw_health_bars(team_healths, team);
     }
 }
 
 // -----------------------------------------------------------
 // Draw the health bars based on the given tanks health values
 // -----------------------------------------------------------
-void Tmpl8::Game::draw_health_bars(const std::vector<const Tank*>& sorted_tanks, const int team)
+void Tmpl8::Game::draw_health_bars(const std::vector<int>& sorted_healths, const int team)
 {
     int health_bar_start_x = (team < 1) ? 0 : (SCRWIDTH - HEALTHBAR_OFFSET) - 1;
     int health_bar_end_x = (team < 1) ? health_bar_width : health_bar_start_x + health_bar_width - 1;
@@ -419,19 +399,19 @@ void Tmpl8::Game::draw_health_bars(const std::vector<const Tank*>& sorted_tanks,
     }
 
     //Draw the <SCRHEIGHT> least healthy tank health bars
-    int draw_count = std::min(SCRHEIGHT, (int)sorted_tanks.size());
+    int draw_count = std::min(SCRHEIGHT, (int)sorted_healths.size());
     for (int i = 0; i < draw_count - 1; i++)
     {
         //Health bars are 1 pixel each
         int health_bar_start_y = i * 1;
         int health_bar_end_y = health_bar_start_y + 1;
-
-        float health_fraction = (1 - ((double)sorted_tanks.at(i)->health / (double)tank_max_health));
+        float health_fraction = (1 - ((double)sorted_healths.at(i) / (double)tank_max_health));
 
         if (team == 0) { screen->bar(health_bar_start_x + (int)((double)health_bar_width * health_fraction), health_bar_start_y, health_bar_end_x, health_bar_end_y, GREENMASK); }
         else { screen->bar(health_bar_start_x, health_bar_start_y, health_bar_end_x - (int)((double)health_bar_width * health_fraction), health_bar_end_y, GREENMASK); }
     }
 }
+
 
 // -----------------------------------------------------------
 // When we reach max_frames print the duration and speedup multiplier
@@ -469,6 +449,7 @@ void Tmpl8::Game::measure_performance()
 // -----------------------------------------------------------
 void Game::tick(float deltaTime)
 {
+    cout << cells.size() << endl;
     if (!lock_update)
     {
         update(deltaTime);
