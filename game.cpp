@@ -20,6 +20,7 @@ constexpr auto max_frames = 2000;
 // Start: 5.23m, speedup 0.4, 323866
 // Grid collision: 4.40m, speedup 1.2, 280300
 // Quick sort: 4.41m, speedup 1.0, 281855
+// Convex hull: 
 
 constexpr auto REF_PERFORMANCE = 281855; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
 static timer perf_timer;
