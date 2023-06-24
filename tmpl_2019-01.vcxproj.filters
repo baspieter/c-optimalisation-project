@@ -17,6 +17,7 @@
     <ClCompile Include="Cell.cpp" />
     <ClCompile Include="check_tank_collision.cpp" />
     <ClCompile Include="sort_by_tank_health.cpp" />
+    <ClCompile Include="calculate_convex_hull.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h" />
@@ -37,6 +38,7 @@
     <ClInclude Include="Cell.h" />
     <ClInclude Include="check_tank_collision.h" />
     <ClInclude Include="sort_by_tank_health.h" />
+    <ClInclude Include="calculate_convex_hull.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template code">

@@ -95,6 +95,7 @@ using namespace Tmpl8;
 #include "cell.h"
 #include "check_tank_collision.h"
 #include "sort_by_tank_health.h"
+#include "calculate_convex_hull.h"
 
 #include "game.h"
 

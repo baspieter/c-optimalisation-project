@@ -119,6 +119,7 @@
   </ItemDefinitionGroup>
   <!-- END Custom section -->
   <ItemGroup>
+    <ClCompile Include="calculate_convex_hull.cpp" />
     <ClCompile Include="Cell.cpp" />
     <ClCompile Include="check_tank_collision.cpp" />
     <ClCompile Include="explosion.cpp" />
@@ -135,6 +136,7 @@
     <ClCompile Include="terrain.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="calculate_convex_hull.h" />
     <ClInclude Include="Cell.h" />
     <ClInclude Include="check_tank_collision.h" />
     <ClInclude Include="explosion.h" />

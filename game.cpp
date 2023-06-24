@@ -1,8 +1,8 @@
 #include "precomp.h" // include (only) this in every .cpp file
 #include <ranges>
 
-constexpr auto num_tanks_blue = 20; //2048
-constexpr auto num_tanks_red = 20;
+constexpr auto num_tanks_blue = 2048; //2048
+constexpr auto num_tanks_red = 2048;
 
 constexpr auto tank_max_health = 1000;
 constexpr auto rocket_hit_value = 60;
@@ -21,7 +21,7 @@ constexpr auto max_frames = 2000;
 // Grid collision: 4.40m, speedup 1.2, 280300
 // Quick sort: 4.41m, speedup 1.0, 281855
 
-constexpr auto REF_PERFORMANCE = 280300; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
+constexpr auto REF_PERFORMANCE = 281855; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
 static timer perf_timer;
 static float duration;
 
@@ -89,6 +89,7 @@ void Game::init()
         tank_cell->tank_indices.push_back(tank_index);
     }
 
+    outside_cell_indices = Cell::initialize_outside_cell_indices(cells);
 
     particle_beams.push_back(Particle_beam(vec2(590, 327), vec2(100, 50), &particle_beam_sprite, particle_beam_hit_value));
     particle_beams.push_back(Particle_beam(vec2(64, 64), vec2(100, 50), &particle_beam_sprite, particle_beam_hit_value));
@@ -152,6 +153,7 @@ void Game::update(float deltaTime)
     }
 
     //Update tanks
+    vector<vec2> tank_positions;
 
     for (Tank& tank : tanks)
     {
@@ -161,7 +163,7 @@ void Game::update(float deltaTime)
             tank.tick(background_terrain);
 
             // Check if tank is still in the right cell. If not, update it.
-            Cell::check_or_update_cell(tank, cells, tanks);
+            Cell::check_or_update_cell(tank, cells, outside_cell_indices, tanks);
 
             // Check if tank collided with tanks in surrounding cells, if so, nudge away.
             check_tank_collision(tank, tanks, cells);
@@ -175,6 +177,16 @@ void Game::update(float deltaTime)
 
                 tank.reload_rocket();
             }
+
+            if (tank.active && find(outside_cell_indices.begin(), outside_cell_indices.end(), tank.cell_index) != outside_cell_indices.end()) {
+                
+                if (tank.cell_index == outside_cell_indices[0] && !tank_positions.empty() && tank.position.x < tank_positions[0].x) {
+                    tank_positions.insert(tank_positions.begin(), tank.position);
+                } 
+                else {
+                    tank_positions.push_back(tank.position);
+                }
+            }
         }
     }
 
@@ -184,55 +196,9 @@ void Game::update(float deltaTime)
         smoke.tick();
     }
 
-    //Calculate "forcefield" around active tanks
-    forcefield_hull.clear();
-
-    vec2 point_on_hull;
-    bool point_on_hull_assigned = false;
-
-    //Find left most tank position
-    for (Tank& tank : tanks)
-    {
-        if (tank.active)
-        {
-            if (!point_on_hull_assigned) {
-                point_on_hull = tank.position;
-                point_on_hull_assigned = true;
-            }
-
-            if (tank.position.x <= point_on_hull.x)
-            {
-                point_on_hull = tank.position;
-            }
-        }
-    }
-
     //Calculate convex hull for 'rocket barrier'
-    for (Tank& tank : tanks)
-    {
-        if (tank.active)
-        {
-            forcefield_hull.push_back(point_on_hull);
-            vec2 endpoint = point_on_hull;
-
-            for (Tank& tank : tanks)
-            {
-                if (tank.active)
-                {
-                    if ((endpoint == point_on_hull) || left_of_line(point_on_hull, endpoint, tank.position))
-                    {
-                        endpoint = tank.position;
-                    }
-                }
-            }
-            point_on_hull = endpoint;
-
-            if (endpoint == forcefield_hull.at(0))
-            {
-                break;
-            }
-        }
-    }
+    forcefield_hull.clear();
+    forcefield_hull = GrahamScan(tank_positions);
 
     //Update rockets
     for (Rocket& rocket : rockets)
@@ -249,6 +215,10 @@ void Game::update(float deltaTime)
                 if (tank.hit(rocket_hit_value))
                 {
                     smokes.push_back(Smoke(smoke, tank.position - vec2(7, 24)));
+                }
+
+                if (!tank.active) {
+                    Cell::remove_tank_from_cell(tank.index, tank.cell_index, cells);
                 }
 
                 rocket.active = false;
@@ -293,6 +263,10 @@ void Game::update(float deltaTime)
                 if (tank.hit(particle_beam.damage))
                 {
                     smokes.push_back(Smoke(smoke, tank.position - vec2(0, 48)));
+                }
+
+                if (!tank.active) {
+                    Cell::remove_tank_from_cell(tank.index, tank.cell_index, cells);
                 }
             }
         }
@@ -348,14 +322,14 @@ void Game::draw()
     }
 
     //Draw forcefield (mostly for debugging, its kinda ugly..)
-    for (size_t i = 0; i < forcefield_hull.size(); i++)
-    {
-        vec2 line_start = forcefield_hull.at(i);
-        vec2 line_end = forcefield_hull.at((i + 1) % forcefield_hull.size());
-        line_start.x += HEALTHBAR_OFFSET;
-        line_end.x += HEALTHBAR_OFFSET;
-        screen->line(line_start, line_end, 0x0000ff);
-    }
+    //for (size_t i = 0; i < forcefield_hull.size(); i++)
+    //{
+    //    vec2 line_start = forcefield_hull.at(i);
+    //    vec2 line_end = forcefield_hull.at((i + 1) % forcefield_hull.size());
+    //    line_start.x += HEALTHBAR_OFFSET;
+    //    line_end.x += HEALTHBAR_OFFSET;
+    //    screen->line(line_start, line_end, 0x0000ff);
+    //}
 
     //Draw sorted health bars
     vector<int> team_healths;
@@ -449,7 +423,6 @@ void Tmpl8::Game::measure_performance()
 // -----------------------------------------------------------
 void Game::tick(float deltaTime)
 {
-    cout << cells.size() << endl;
     if (!lock_update)
     {
         update(deltaTime);

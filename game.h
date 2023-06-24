@@ -51,6 +51,7 @@ class Game
     vector<Explosion> explosions;
     vector<Particle_beam> particle_beams;
     vector<Cell> cells;
+    vector<int> outside_cell_indices;
 
     Terrain background_terrain;
     std::vector<vec2> forcefield_hull;
