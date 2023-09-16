@@ -18,14 +18,10 @@ float ccw(const vec2& a, const vec2& b, const vec2& c) {
 	return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 }
 
-// Returns true if a is lexicographically before b.
-bool isLeftOf(const vec2& a, const vec2& b) {
-	return (a.x < b.x || (a.x == b.x && a.y < b.y));
-}
-
 // The Graham scan algorithm for convex hull.
 // https://en.wikipedia.org/wiki/Graham_scan
 vector<vec2> GrahamScan(vector<vec2> v) {
+
 	// Sort the rest of the points in counter-clockwise order
 	// from our leftmost point.
 	sort(v.begin() + 1, v.end(), ccwSorter(v[0]));
