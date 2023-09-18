@@ -1,7 +1,7 @@
 #include "precomp.h" // include (only) this in every .cpp file
 #include <ranges>
 
-constexpr auto num_tanks_blue = 2048; //2048
+constexpr auto num_tanks_blue = 2048;
 constexpr auto num_tanks_red = 2048;
 
 constexpr auto tank_max_health = 1000;
@@ -15,14 +15,19 @@ constexpr auto health_bar_width = 70;
 constexpr auto max_frames = 2000;
 
 // Game order: Init > Tick > Update > Draw
-
-//Global performance timer
+// Global performance timer
 // Start: 5.23m, speedup 0.4, 323866
 // Grid collision: 4.40m, speedup 1.2, 280300
-// Quick sort: 4.41m, speedup 1.0, 281855
+// Tank health bar sort: 4:24m, speedup 1.1, 264179
 // Convex hull: 
 
-constexpr auto REF_PERFORMANCE = 281855; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
+// Test 1 (tank_position vector) -> 4:34
+// Test 2 (no tank_position vector) -> Crash (possibly bc of ++->position)
+// Test 3 (tank_position reference vector) -> 4:30
+// Test 4 (Without configuring first tank & with reference) -> Above
+// Test 5 (Scan that does not create new vector) -> 4:30 
+
+constexpr auto REF_PERFORMANCE = 264179; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
 static timer perf_timer;
 static float duration;
 
@@ -155,7 +160,7 @@ void Game::update(float deltaTime)
 
     //Update tanks
     vector<vec2> tank_positions;
-
+    forcefield_hull.clear();
     for (Tank& tank : tanks)
     {
         if (tank.active)
@@ -179,14 +184,8 @@ void Game::update(float deltaTime)
                 tank.reload_rocket();
             }
 
-            if (tank.active && find(outside_cell_indices.begin(), outside_cell_indices.end(), tank.cell_index) != outside_cell_indices.end()) {
-                
-                if (tank.cell_index == outside_cell_indices[0] && !tank_positions.empty() && tank.position.x < tank_positions[0].x) {
-                    tank_positions.insert(tank_positions.begin(), tank.position);
-                } 
-                else {
-                    tank_positions.push_back(tank.position);
-                }
+            if (find(outside_cell_indices.begin(), outside_cell_indices.end(), tank.cell_index) != outside_cell_indices.end()) {
+                tank_positions.push_back(tank.position);
             }
         }
     }
@@ -198,8 +197,7 @@ void Game::update(float deltaTime)
     }
 
     //Calculate convex hull for 'rocket barrier'
-    forcefield_hull.clear();
-    forcefield_hull = GrahamScan(tank_positions);
+    forcefield_hull = convex_hull(tank_positions);
 
     //Update rockets
     for (Rocket& rocket : rockets)
@@ -323,14 +321,14 @@ void Game::draw()
     }
 
     //Draw forcefield (mostly for debugging, its kinda ugly..)
-    //for (size_t i = 0; i < forcefield_hull.size(); i++)
-    //{
-    //    vec2 line_start = forcefield_hull.at(i);
-    //    vec2 line_end = forcefield_hull.at((i + 1) % forcefield_hull.size());
-    //    line_start.x += HEALTHBAR_OFFSET;
-    //    line_end.x += HEALTHBAR_OFFSET;
-    //    screen->line(line_start, line_end, 0x0000ff);
-    //}
+    for (size_t i = 0; i < forcefield_hull.size(); i++)
+    {
+        vec2 line_start = forcefield_hull.at(i);
+        vec2 line_end = forcefield_hull.at((i + 1) % forcefield_hull.size());
+        line_start.x += HEALTHBAR_OFFSET;
+        line_end.x += HEALTHBAR_OFFSET;
+        screen->line(line_start, line_end, 0x0000ff);
+    }
 
     //Draw sorted health bars
     vector<int> team_healths;
@@ -350,8 +348,16 @@ void Game::draw()
             }
         }
 
+        //using std::chrono::high_resolution_clock;
+        //using std::chrono::duration_cast;
+        //using std::chrono::duration;
+        //using std::chrono::microseconds;
+        //auto t1 = high_resolution_clock::now();
+        //auto t2 = high_resolution_clock::now();
+        //auto ms_int = duration_cast<microseconds>(t2 - t1);
+        //std::cout << ms_int.count() << "microseconds\n";
 
-        sort_tanks_by_health(team_healths, 0, team_healths.size() - 1);
+        sort(team_healths.begin(), team_healths.end());
         draw_health_bars(team_healths, team);
     }
 }

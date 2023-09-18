@@ -111,10 +111,6 @@ namespace Tmpl8
     {
         Cell cell = cells[cell_index];
         cell.tank_indices.erase(std::remove(cell.tank_indices.begin(), cell.tank_indices.end(), tank_index), cell.tank_indices.end());
-
-        if (cell.tank_indices.empty()) {
-            cout << "Last tank in cell removed" << endl;
-        }
     }
 
 } // namespace Tmpl8
