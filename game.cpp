@@ -1,6 +1,18 @@
 #include "precomp.h" // include (only) this in every .cpp file
 #include <ranges>
 
+//using std::chrono::high_resolution_clock;
+//using std::chrono::duration_cast;
+//using std::chrono::duration;
+//using std::chrono::microseconds;
+//auto t1 = high_resolution_clock::now();
+//auto t2 = high_resolution_clock::now();
+//auto ms_int = duration_cast<microseconds>(t2 - t1);
+//std::cout << ms_int.count() << "microseconds\n";
+
+// Performance ideas
+// Remove cell & tank index. Make them link together by position. (Calculation to col/row)
+
 constexpr auto num_tanks_blue = 2048;
 constexpr auto num_tanks_red = 2048;
 
@@ -17,17 +29,12 @@ constexpr auto max_frames = 2000;
 // Game order: Init > Tick > Update > Draw
 // Global performance timer
 // Start: 5.23m, speedup 0.4, 323866
-// Grid collision: 4.40m, speedup 1.2, 280300
+// Grid collision (cells): 4.40m, speedup 1.2, 280300
 // Tank health bar sort: 4:24m, speedup 1.1, 264179
-// Convex hull: 
+// Convex hull: 4:24, speedup 1.0, 264988
+// Rocket collision (cells): 4:19, speedup: 1.0, 259825
 
-// Test 1 (tank_position vector) -> 4:34
-// Test 2 (no tank_position vector) -> Crash (possibly bc of ++->position)
-// Test 3 (tank_position reference vector) -> 4:30
-// Test 4 (Without configuring first tank & with reference) -> Above
-// Test 5 (Scan that does not create new vector) -> 4:30 
-
-constexpr auto REF_PERFORMANCE = 264179; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
+constexpr auto REF_PERFORMANCE = 264988; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
 static timer perf_timer;
 static float duration;
 
@@ -161,16 +168,15 @@ void Game::update(float deltaTime)
     //Update tanks
     vector<vec2> tank_positions;
     forcefield_hull.clear();
+
     for (Tank& tank : tanks)
     {
         if (tank.active)
         {
             //Move tanks according to speed and nudges (see above) also reload
             tank.tick(background_terrain);
-
             // Check if tank is still in the right cell. If not, update it.
             Cell::check_or_update_cell(tank, cells, outside_cell_indices, tanks);
-
             // Check if tank collided with tanks in surrounding cells, if so, nudge away.
             check_tank_collision(tank, tanks, cells);
 
@@ -205,9 +211,21 @@ void Game::update(float deltaTime)
         rocket.tick();
 
         //Check if rocket collides with enemy tank, spawn explosion, and if tank is destroyed spawn a smoke plume
-        for (Tank& tank : tanks)
-        {
-            if (tank.active && (tank.allignment != rocket.allignment) && rocket.intersects(tank.position, tank.collision_radius))
+
+        // Find surrounding cells.
+        int rocket_col = rocket.position.x / CELL_WIDTH;
+        int rocket_row = rocket.position.y / CELL_HEIGHT;
+        vector<Cell> surrounding_rocket_cells = find_surrounding_cells(rocket_col, rocket_row, cells);
+        vector<int> tank_indices;
+        for (const Cell& cell : surrounding_rocket_cells) {
+            // Append the tank_indices of the current cell to tank_indices
+            tank_indices.insert(tank_indices.end(), cell.tank_indices.begin(), cell.tank_indices.end());
+        }
+        // Loop through them and their tanks.
+        for (int tank_index : tank_indices) {
+            Tank& tank = tanks.at(tank_index);
+
+            if ((tank.allignment != rocket.allignment) && rocket.intersects(tank.position, tank.collision_radius))
             {
                 explosions.push_back(Explosion(&explosion, tank.position));
 
@@ -243,11 +261,8 @@ void Game::update(float deltaTime)
         }
     }
 
-
-
     //Remove exploded rockets with remove erase idiom
     rockets.erase(std::remove_if(rockets.begin(), rockets.end(), [](const Rocket& rocket) { return !rocket.active; }), rockets.end());
-
 
     //Update particle beams
     for (Particle_beam& particle_beam : particle_beams)
@@ -321,14 +336,48 @@ void Game::draw()
     }
 
     //Draw forcefield (mostly for debugging, its kinda ugly..)
-    for (size_t i = 0; i < forcefield_hull.size(); i++)
-    {
-        vec2 line_start = forcefield_hull.at(i);
-        vec2 line_end = forcefield_hull.at((i + 1) % forcefield_hull.size());
-        line_start.x += HEALTHBAR_OFFSET;
-        line_end.x += HEALTHBAR_OFFSET;
-        screen->line(line_start, line_end, 0x0000ff);
-    }
+    //for (size_t i = 0; i < forcefield_hull.size(); i++)
+    //{
+    //    vec2 line_start = forcefield_hull.at(i);
+    //    vec2 line_end = forcefield_hull.at((i + 1) % forcefield_hull.size());
+    //    line_start.x += HEALTHBAR_OFFSET;
+    //    line_end.x += HEALTHBAR_OFFSET;
+    //    screen->line(line_start, line_end, 0x0000ff);
+    //}
+    //for (int cell_index : outside_cell_indices) {
+    //    
+    //    Cell cell = cells.at(cell_index);
+    //    int column = cell.column;
+    //    int row = cell.row;
+
+    //    vec2 line_left = vec2((column * CELL_WIDTH), (row * CELL_HEIGHT));
+    //    vec2 line_right = vec2((column * CELL_WIDTH + CELL_WIDTH), (row * CELL_HEIGHT));
+    //    line_left.x += HEALTHBAR_OFFSET;
+    //    line_right.x += HEALTHBAR_OFFSET;
+    //    screen->line(line_left, line_right, 0x0000ff);
+    //    screen->print((std::string{ "Cell index: " } + std::to_string(cell.index)).c_str(), line_left.x, line_right.y, 0x111111);
+
+    //    vec2 line_left2 = vec2((column * CELL_WIDTH), (row * CELL_HEIGHT + CELL_HEIGHT));
+    //    vec2 line_right2 = vec2((column * CELL_WIDTH + CELL_WIDTH), (row * CELL_HEIGHT + CELL_HEIGHT));
+    //    line_left2.x += HEALTHBAR_OFFSET;
+    //    line_right2.x += HEALTHBAR_OFFSET;
+    //    screen->line(line_left2, line_right2, 0x0000ff);
+
+    //    screen->print((std::string{ "Tanks: " } + std::to_string(cell.tank_indices.size())).c_str(), line_left.x, line_right.y + 50, 0x000000);
+
+    //    vec2 line_top = vec2((column * CELL_WIDTH), (row * CELL_HEIGHT));
+    //    vec2 line_bottom = vec2((column * CELL_WIDTH), (row * CELL_HEIGHT + CELL_HEIGHT));
+    //    line_top.x += HEALTHBAR_OFFSET;
+    //    line_bottom.x += HEALTHBAR_OFFSET;
+    //    screen->line(line_top, line_bottom, 0x0000ff);
+
+    //    vec2 line_top2 = vec2((column * CELL_WIDTH + CELL_WIDTH), (row * CELL_HEIGHT));
+    //    vec2 line_bottom2 = vec2((column * CELL_WIDTH + CELL_WIDTH), (row * CELL_HEIGHT + CELL_HEIGHT));
+    //    line_top2.x += HEALTHBAR_OFFSET;
+    //    line_bottom2.x += HEALTHBAR_OFFSET;
+    //    screen->line(line_top2, line_bottom2, 0x0000ff);
+    //}
+
 
     //Draw sorted health bars
     vector<int> team_healths;
@@ -347,15 +396,6 @@ void Game::draw()
                 if (it->active) { team_healths.emplace_back(it->health); }
             }
         }
-
-        //using std::chrono::high_resolution_clock;
-        //using std::chrono::duration_cast;
-        //using std::chrono::duration;
-        //using std::chrono::microseconds;
-        //auto t1 = high_resolution_clock::now();
-        //auto t2 = high_resolution_clock::now();
-        //auto ms_int = duration_cast<microseconds>(t2 - t1);
-        //std::cout << ms_int.count() << "microseconds\n";
 
         sort(team_healths.begin(), team_healths.end());
         draw_health_bars(team_healths, team);
@@ -434,12 +474,13 @@ void Game::tick(float deltaTime)
     {
         update(deltaTime);
     }
+
     draw();
 
     measure_performance();
 
     // print something in the graphics window
-    //screen->Print("hello world", 2, 2, 0xffffff);
+    /*screen->print("hello world", 2, 2, 0xffffff);*/
 
     // print something to the text window
     //cout << "This goes to the console window." << std::endl;

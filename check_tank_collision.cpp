@@ -1,7 +1,8 @@
 #include "precomp.h" // include (only) this in every .cpp file
 
 void check_tank_collision(Tank& current_tank, vector<Tank>& tanks, vector<Cell>& cells) {
-    vector<Cell> surrounding_cells = find_surrounding_cells(current_tank, cells);
+    Cell& tank_cell = cells.at(current_tank.cell_index);
+    vector<Cell> surrounding_cells = find_surrounding_cells(tank_cell.column, tank_cell.row, cells);
 
     for (Cell& cell : surrounding_cells)
     {
@@ -24,19 +25,18 @@ void check_tank_collision(Tank& current_tank, vector<Tank>& tanks, vector<Cell>&
     }
 }
 
-vector<Cell> find_surrounding_cells(Tank tank, vector<Cell>& cells)
+vector<Cell> find_surrounding_cells(int col, int row, vector<Cell>& cells)
 {
     vector<Cell> surrounding_cells;
-    Cell& tank_cell = cells.at(tank.cell_index);
 
     // Tank original position.
-    int tank_col_or = tank_cell.column;
-    int tank_row_or = tank_cell.row;
+    int tank_col_or = col;
+    int tank_row_or = row;
 
     // Tank most left top cell.
     int tank_col = tank_col_or - 1;
     int tank_row = tank_row_or - 1;
-
+ 
     for (int j = 0;j < 9;++j) {
         if (j == 3 || j == 6) {
             ++tank_row;

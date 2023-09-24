@@ -20,6 +20,7 @@ float ccw(const vec2& a, const vec2& b, const vec2& c) {
 
 vector<vec2> convex_hull(vector<vec2>& v) {
 	sort(v.begin() + 1, v.end(), ccwSorter(v[0]));
+	if (v.size() < 4) return v;
 
 	vector<vec2> hull;
 	auto it = v.begin();
