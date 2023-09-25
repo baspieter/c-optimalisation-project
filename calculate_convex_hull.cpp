@@ -29,7 +29,7 @@ vector<vec2> convex_hull(vector<vec2>& v) {
 	hull.push_back(*it++);
 
 	while (it != v.end()) {
-		while (ccw(*(hull.rbegin() + 1), *(hull.rbegin()), *it) >= 0) {
+		while (ccw(*(hull.rbegin() + 1), *(hull.rbegin()), *it) >= 0 && hull.size() > 2) {
 			hull.pop_back();
 		}
 		hull.push_back(*it++);

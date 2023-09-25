@@ -18,6 +18,7 @@
     <ClCompile Include="check_tank_collision.cpp" />
     <ClCompile Include="sort_by_tank_health.cpp" />
     <ClCompile Include="calculate_convex_hull.cpp" />
+    <ClCompile Include="notes.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h" />
