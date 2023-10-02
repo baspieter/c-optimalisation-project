@@ -30,22 +30,35 @@ namespace Tmpl8
         return &cells.back();
     }
 
-    // Update tank cells when tanks move.
+    // Check and update current tank cell when the tank moves.
     void Cell::check_or_update_cell(Tank& tank, vector<Cell>& cells, vector<int>& outside_cells_indices, vector<Tank>& tanks)
     {
         int tank_col = tank.position.x / CELL_WIDTH;
         int tank_row = tank.position.y / CELL_HEIGHT;
         Cell& cell = cells.at(tank.cell_index);
 
-        // Return when tank is still in the same cell.
+        // Return when tank is still in the same cell. If so, return.
         if (cell.row == tank_row && cell.column == tank_col) return;
 
+        // Remove tank from cell and find or create a new one.
         cell.tank_indices.erase(remove_if(cell.tank_indices.begin(), cell.tank_indices.end(), [tank](int tank_index) { return tank.index == tank_index; }), cell.tank_indices.end());
         Cell* new_cell = Cell::find_cell_for_tank(tank.position.x, tank.position.y, cells);
         tank.cell_index = new_cell->index;
         new_cell->tank_indices.push_back(tank.index);
 
+        // If there are no tanks left in the cell, outside_cells_indices should be updated.
+        if (!cell.tank_indices.empty()) return;
 
+        outside_cells_indices.clear();
+        outside_cells_indices = initialize_outside_cell_indices(cells);
+    }
+
+    void Cell::remove_tank_from_cell(int tank_index, int cell_index, vector<Cell>& cells, vector<int>& outside_cells_indices)
+    {
+        Cell& cell = cells.at(cell_index);
+        cell.tank_indices.erase(std::remove(cell.tank_indices.begin(), cell.tank_indices.end(), tank_index), cell.tank_indices.end());
+
+        // If there are no tanks left in the cell, outside_cells_indices should be updated.
         if (!cell.tank_indices.empty()) return;
 
         outside_cells_indices.clear();
@@ -84,16 +97,7 @@ namespace Tmpl8
         for (const auto& cell : cells) {
             if (cell.tank_indices.size() == 0) continue;
 
-            if (cell.row == min_row) {
-                outside_cells_indices.push_back(cell.index);
-            }
-            if (cell.column == min_col) {
-                outside_cells_indices.push_back(cell.index);
-            }
-            if (cell.column == max_col) {
-                outside_cells_indices.push_back(cell.index);
-            }
-            if (cell.row == max_row) {
+            if (cell.row == min_row || cell.column == min_col || cell.column == max_col || cell.row == max_row) {
                 outside_cells_indices.push_back(cell.index);
             }
         }
@@ -103,12 +107,6 @@ namespace Tmpl8
         outside_cells_indices.erase(it, outside_cells_indices.end());
 
         return outside_cells_indices;
-    }
-
-    void Cell::remove_tank_from_cell(int tank_index, int cell_index, vector<Cell>& cells)
-    {
-        Cell& cell = cells.at(cell_index);
-        cell.tank_indices.erase(std::remove(cell.tank_indices.begin(), cell.tank_indices.end(), tank_index), cell.tank_indices.end());
     }
 
 } // namespace Tmpl8

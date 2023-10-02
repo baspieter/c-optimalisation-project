@@ -106,6 +106,7 @@ void Game::shutdown()
 
 // -----------------------------------------------------------
 // Iterates through all tanks and returns the closest enemy tank for the given tank
+// @note I can't use the grid system because it always needs to find a new tank.
 // -----------------------------------------------------------
 Tank& Game::find_closest_enemy(Tank& current_tank)
 {
@@ -128,12 +129,6 @@ Tank& Game::find_closest_enemy(Tank& current_tank)
     return tanks.at(closest_index);
 }
 
-//Checks if a point lies on the left of an arbitrary angled line
-bool Tmpl8::Game::left_of_line(vec2 line_start, vec2 line_end, vec2 point)
-{
-    return ((line_end.x - line_start.x) * (point.y - line_start.y) - (line_end.y - line_start.y) * (point.x - line_start.x)) < 0;
-}
-
 void Game::update(float deltaTime)
 {
     //Calculate the route to the destination for each tank using BFS
@@ -147,9 +142,14 @@ void Game::update(float deltaTime)
     }
 
     //Update tanks
-    vector<vec2> tank_positions;
-    forcefield_hull.clear();
 
+    // Prepare convex hull calculation
+    forcefield_hull.clear();
+    // Define variable for all active tanks on the outside cells for convex hull calculation.
+    vector<vec2> tank_positions;
+
+    // Loop through active tanks.
+    // @note I can't use the cell grid here because the tanks should be updated in tanks order.
     for (Tank& tank : tanks) {
         if (!tank.active) continue;
 
@@ -178,6 +178,8 @@ void Game::update(float deltaTime)
                 tank.reload_rocket();
             }
 
+            // See if the current tank is positioned in one of the outside_cells. If so, add their position to tank_positions.
+            // This is to prepare the convex_hull calculation.
             vector<int>::iterator outside_cell_iterator;
             outside_cell_iterator = std::find_if(outside_cell_indices.begin(), outside_cell_indices.end(), [cell](int outside_cell_index) { return cell.index == outside_cell_index; });
             if (outside_cell_iterator != outside_cell_indices.end()) {
@@ -192,7 +194,8 @@ void Game::update(float deltaTime)
         smoke.tick();
     }
 
-    //Calculate convex hull for 'rocket barrier'
+    // Calculate convex hull for 'rocket barrier' with the tank_positions collected before.
+    // Using the Graham scan algorithm.
     forcefield_hull = convex_hull(tank_positions);
 
     //Update rockets
@@ -200,13 +203,13 @@ void Game::update(float deltaTime)
     {
         rocket.tick();
 
-        //Check if rocket collides with enemy tank, spawn explosion, and if tank is destroyed spawn a smoke plume
-
         // Find surrounding cells.
         int rocket_col = rocket.position.x / CELL_WIDTH;
         int rocket_row = rocket.position.y / CELL_HEIGHT;
+        // Using the same function as for tanks, but now given the rocket position.
         vector<Cell> surrounding_rocket_cells = find_surrounding_cells(rocket_col, rocket_row, cells);
 
+        //Check if rocket collides with enemy tank, spawn explosion, and if tank is destroyed spawn a smoke plume
         for (const Cell& surrounding_rocket_cell : surrounding_rocket_cells) {
             for (int tank_index : surrounding_rocket_cell.tank_indices) {
                 Tank& tank = tanks.at(tank_index);
@@ -221,7 +224,7 @@ void Game::update(float deltaTime)
                     }
 
                     if (!tank.active) {
-                        Cell::remove_tank_from_cell(tank.index, tank.cell_index, cells);
+                        Cell::remove_tank_from_cell(tank.index, tank.cell_index, cells, outside_cell_indices);
                     }
 
                     rocket.active = false;
@@ -231,8 +234,7 @@ void Game::update(float deltaTime)
         }
     }
 
-    //Disable rockets if they collide with the "forcefield"
-    //Hint: A point to convex hull intersection test might be better here? :) (Disable if outside)
+    //Disable rockets if they collide with the "forcefield".
     for (Rocket& rocket : rockets)
     {
         if (rocket.active)
@@ -257,6 +259,7 @@ void Game::update(float deltaTime)
         particle_beam.tick(tanks);
 
         //Damage all tanks within the damage window of the beam (the window is an axis-aligned bounding box)
+        // Iterate through all cells and their tanks.
         for (Cell& cell : cells) {
             for (int tank_index : cell.tank_indices) {
                 Tank& tank = tanks.at(tank_index);
@@ -268,8 +271,9 @@ void Game::update(float deltaTime)
                         smokes.push_back(Smoke(smoke, tank.position - vec2(0, 48)));
                     }
 
+                    // If tank is no longer active, remove from cell.
                     if (!tank.active) {
-                        Cell::remove_tank_from_cell(tank.index, tank.cell_index, cells);
+                        Cell::remove_tank_from_cell(tank.index, tank.cell_index, cells, outside_cell_indices);
                     }
                 }
             }
@@ -296,6 +300,8 @@ void Game::draw()
 
     //Draw background
     background_terrain.draw(screen);
+
+    //Draw convex hull or cells
 
     //Draw sprites
     for (int i = 0; i < num_tanks_blue + num_tanks_red; i++)
@@ -327,21 +333,26 @@ void Game::draw()
 
     //Draw sorted health bars
     vector<int> team_healths;
-    team_healths.reserve(num_tanks_blue);
     for (int team = 0; team < 2; team++)
     {
         team_healths.clear();
 
+        // Fill team_healths with the health of current team.
         if (team == 0) {
+            team_healths.reserve(num_tanks_blue);
             for (auto it = tanks.begin(); it != tanks.begin() + num_tanks_blue; ++it) {
                 if (it->active) { team_healths.emplace_back(it->health); }
             }
         }
         else {
+            team_healths.reserve(num_tanks_red);
             for (auto it = tanks.begin() + num_tanks_blue; it != tanks.end(); ++it) {
                 if (it->active) { team_healths.emplace_back(it->health); }
             }
         }
+
+        // Sort, not using sort_by_tank_health anymore because performance is not as good.
+        //sort_tanks_by_health(team_healths, 0, team_healths.size() - 1);
 
         sort(team_healths.begin(), team_healths.end());
         draw_health_bars(team_healths, team);
@@ -424,12 +435,6 @@ void Game::tick(float deltaTime)
     draw();
 
     measure_performance();
-
-    // print something in the graphics window
-    /*screen->print("hello world", 2, 2, 0xffffff);*/
-
-    // print something to the text window
-    //cout << "This goes to the console window." << std::endl;
 
     //Print frame count
     frame_count++;

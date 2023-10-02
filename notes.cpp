@@ -22,9 +22,8 @@
 
 // -----------------------------------------------------------
 // DRAW ALL CELLS
-//for (int cell_index : outside_cell_indices) {
+//for (Cell cell : cells) {
 //    
-//    Cell cell = cells.at(cell_index);
 //    int column = cell.column;
 //    int row = cell.row;
 
