@@ -21,6 +21,8 @@ float ccw(const vec2& a, const vec2& b, const vec2& c) {
 // The convex hull is the smalles Polygon (veelhoek) which has all the given points within the lines.
 vector<vec2> convex_hull(vector<vec2>& v) {
 	// Points should be in the right ccw order.
+	// O(n log(n))
+	// The sort() function uses a 3 fold hybrid sorting technique named Introsort. It is a combination of Quick Sort, Heap Sort, and Insertion Sor
 	sort(v.begin() + 1, v.end(), ccwSorter(v[0]));
 
 	// Return because we need to be able to check the next 2 points.
@@ -34,6 +36,7 @@ vector<vec2> convex_hull(vector<vec2>& v) {
 	hull.push_back(*it++);
 
 	// Iterate through the remaining points.
+	// O(n log(n))
 	while (it != v.end()) {
 		// Check if the last 3 points make a left turn (ccw), if they don't it removes the last point of the hull until they do make a left turn or there are only 2 points left in the hull.
 		while (ccw(*(hull.rbegin() + 1), *(hull.rbegin()), *it) >= 0 && hull.size() > 2) {

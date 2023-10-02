@@ -20,7 +20,7 @@ constexpr auto max_frames = 2000;
 // Tank health bar sort: 4:24m, speedup 1.1, 264179
 // Convex hull: 4:24, speedup 1.0, 264988io9
 // Rocket collision (cells): 4:19, speedup: 1.0, 259825
-// Replaced tank loops with active cell tank indices: 4:06, speedup 1.1, 246931
+// Replaced tank loops with active cell tank indices: 4:03, speedup 1.1, 243739
 
 constexpr auto REF_PERFORMANCE = 246931; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
 static timer perf_timer;
@@ -352,8 +352,11 @@ void Game::draw()
         }
 
         // Sort, not using sort_by_tank_health anymore because performance is not as good.
+        // O(n*2) Worst case. 04:18m
         //sort_tanks_by_health(team_healths, 0, team_healths.size() - 1);
 
+        // O(n log(n)) Worst case. 04:03m
+        // The sort() function uses a 3 fold hybrid sorting technique named Introsort. It is a combination of Quick Sort, Heap Sort, and Insertion Sort
         sort(team_healths.begin(), team_healths.end());
         draw_health_bars(team_healths, team);
     }
