@@ -18,11 +18,11 @@ constexpr auto max_frames = 2000;
 // Start: 5.23m, speedup 0.4, 323866
 // Grid collision (cells): 4.40m, speedup 1.2, 280300
 // Tank health bar sort: 4:24m, speedup 1.1, 264179
-// Convex hull: 4:24, speedup 1.0, 264988io9
+// Convex hull: 4:24, speedup 1.0, 2649889
 // Rocket collision (cells): 4:19, speedup: 1.0, 259825
 // Replaced tank loops with active cell tank indices: 4:03, speedup 1.1, 243739
 
-constexpr auto REF_PERFORMANCE = 246931; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
+constexpr auto REF_PERFORMANCE = 323866; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
 static timer perf_timer;
 static float duration;
 
@@ -301,7 +301,7 @@ void Game::draw()
     //Draw background
     background_terrain.draw(screen);
 
-    //Draw convex hull or cells
+    //Draw convex hull or cells placeholder
 
     //Draw sprites
     for (int i = 0; i < num_tanks_blue + num_tanks_red; i++)

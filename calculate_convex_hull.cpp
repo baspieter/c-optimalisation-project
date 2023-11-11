@@ -18,7 +18,7 @@ float ccw(const vec2& a, const vec2& b, const vec2& c) {
 }
 
 
-// The convex hull is the smalles Polygon (veelhoek) which has all the given points within the lines.
+// The convex hull is the smallest Polygon (veelhoek) which has all the given points within the lines.
 vector<vec2> convex_hull(vector<vec2>& v) {
 	// Points should be in the right ccw order.
 	// O(n log(n))

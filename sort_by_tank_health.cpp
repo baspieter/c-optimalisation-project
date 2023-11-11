@@ -2,7 +2,7 @@
 
 
 // partition krijgt telkens een kant van de boom.
-// Wisselt tanks op basis van de laatste tank.
+// Wisselt tanks op basis van de laatste tank. Links lager, rechts hoger.
 // Hierdoor staat de laatste tank op de juiste plek.
 // Stuurt de positie van de tank die op de juiste plek staat terug.
 int partition(vector<int>& healths, int start, int end) {

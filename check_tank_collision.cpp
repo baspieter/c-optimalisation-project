@@ -40,7 +40,7 @@ vector<Cell> find_surrounding_cells(int col, int row, vector<Cell>& cells)
     int tank_col = tank_col_or - 1;
     int tank_row = tank_row_or - 1;
  
-    // Start on the lef top, keep updating the column until 3 and 9. In these cases we reset the column & add one to the row.
+    // Start on the left top, keep updating the column until 3 and 9. In these cases we reset the column & add one to the row.
     // At te end we return all surrounding and current cells.
     for (int j = 0;j < 9;++j) {
         if (j == 3 || j == 6) {
