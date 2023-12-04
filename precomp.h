@@ -15,6 +15,17 @@
 #define CELL_WIDTH 128
 #define CELL_HEIGHT 72
 
+#define NUM_TANKS_BLUE 2040
+#define NUM_TANKS_RED 2040
+#define HEALTH_BAR_WIDTH 70
+#define TANK_MAX_HEALTH 1000
+#define ROCKET_HIT_VALUE 60
+#define TANK_RADIUS 3.f
+#define ROCKET_RADIUS 5.f
+
+#define NUM_THREADS 10
+
+
 // #define FULLSCREEN
 // #define ADVANCEDGL	// faster if your system supports it
 
@@ -84,8 +95,6 @@ using namespace std;
 
 using namespace Tmpl8;
 
-#include "thread_pool.h"
-
 #include "tank.h"
 #include "terrain.h"
 #include "rocket.h"
@@ -96,6 +105,14 @@ using namespace Tmpl8;
 #include "check_tank_collision.h"
 #include "sort_by_tank_health.h"
 #include "calculate_convex_hull.h"
+#include "draw_health_bars.h"
+#include "update_rockets.h"
+#include "update_particle_beams.h"
+#include "BS_thread_pool.hpp"
+using std::chrono::high_resolution_clock;
+using std::chrono::duration_cast;
+using std::chrono::duration;
+using std::chrono::milliseconds;
 
 #include "game.h"
 

@@ -19,6 +19,11 @@
     <ClCompile Include="sort_by_tank_health.cpp" />
     <ClCompile Include="calculate_convex_hull.cpp" />
     <ClCompile Include="notes.cpp" />
+    <ClCompile Include="draw_health_bars.cpp" />
+    <ClCompile Include="update_rockets.cpp" />
+    <ClCompile Include="testing_threads.cpp" />
+    <ClCompile Include="update_tanks.cpp" />
+    <ClCompile Include="update_particle_beams.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="game.h" />
@@ -34,12 +39,16 @@
     <ClInclude Include="particle_beam.h" />
     <ClInclude Include="explosion.h" />
     <ClInclude Include="tank.h" />
-    <ClInclude Include="thread_pool.h" />
     <ClInclude Include="terrain.h" />
     <ClInclude Include="Cell.h" />
     <ClInclude Include="check_tank_collision.h" />
     <ClInclude Include="sort_by_tank_health.h" />
     <ClInclude Include="calculate_convex_hull.h" />
+    <ClInclude Include="draw_health_bars.h" />
+    <ClInclude Include="update_rockets.h" />
+    <ClInclude Include="testing_threads.h" />
+    <ClInclude Include="update_tanks.h" />
+    <ClInclude Include="update_particle_beams.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="template code">

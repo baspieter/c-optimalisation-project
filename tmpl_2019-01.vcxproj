@@ -122,6 +122,7 @@
     <ClCompile Include="calculate_convex_hull.cpp" />
     <ClCompile Include="Cell.cpp" />
     <ClCompile Include="check_tank_collision.cpp" />
+    <ClCompile Include="draw_health_bars.cpp" />
     <ClCompile Include="explosion.cpp" />
     <ClCompile Include="game.cpp" />
     <ClCompile Include="notes.cpp" />
@@ -135,11 +136,16 @@
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="terrain.cpp" />
+    <ClCompile Include="testing_threads.cpp" />
+    <ClCompile Include="update_particle_beams.cpp" />
+    <ClCompile Include="update_rockets.cpp" />
+    <ClCompile Include="update_tanks.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="calculate_convex_hull.h" />
     <ClInclude Include="Cell.h" />
     <ClInclude Include="check_tank_collision.h" />
+    <ClInclude Include="draw_health_bars.h" />
     <ClInclude Include="explosion.h" />
     <ClInclude Include="game.h" />
     <ClInclude Include="particle_beam.h" />
@@ -151,7 +157,10 @@
     <ClInclude Include="tank.h" />
     <ClInclude Include="template.h" />
     <ClInclude Include="terrain.h" />
-    <ClInclude Include="thread_pool.h" />
+    <ClInclude Include="testing_threads.h" />
+    <ClInclude Include="update_particle_beams.h" />
+    <ClInclude Include="update_rockets.h" />
+    <ClInclude Include="update_tanks.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="_readme.txt" />

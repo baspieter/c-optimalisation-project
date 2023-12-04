@@ -1,30 +1,37 @@
 #include "precomp.h" // include (only) this in every .cpp file
 #include <ranges>
 
-constexpr auto num_tanks_blue = 2048;
-constexpr auto num_tanks_red = 2048;
-
-constexpr auto tank_max_health = 1000;
-constexpr auto rocket_hit_value = 60;
 constexpr auto particle_beam_hit_value = 50;
-
 constexpr auto tank_max_speed = 1.0;
-
-constexpr auto health_bar_width = 70;
-
 constexpr auto max_frames = 2000;
+
+// TODO'S
+// Create global mutex variables in game_h.
+// Mutex all places where in threads a vector is changed.
+// Make the reload tank method more threadable without a lock around the whole block. Possibly only needed for the vector push_back.
+
 
 // Global performance timer
 // Start: 5.23m, speedup 0.4, 323866
 // Grid collision (cells): 4.40m, speedup 1.2, 280300
 // Tank health bar sort: 4:24m, speedup 1.1, 264179
 // Convex hull: 4:24, speedup 1.0, 2649889
-// Rocket collision (cells): 4:19, speedup: 1.0, 259825
-// Replaced tank loops with active cell tank indices: 4:03, speedup 1.1, 243739
+// Rocket collision (cells): 4:09, speedup: 1.0, 249488
+// Added threads to tank: 3:12 speedup 1.3, 192187
 
-constexpr auto REF_PERFORMANCE = 323866; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
+// Tank update threaded, 300 frames: 61ms
+// Tank update unthreaded, 300 frames: 90ms
+
+// Rocket update threaded, 300 frames: 43ms
+// Rocket update unthreaded, 300 frames: 51ms
+
+
+constexpr auto REF_PERFORMANCE = 249488; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
 static timer perf_timer;
 static float duration;
+
+// Threadpool
+BS::thread_pool pool(NUM_THREADS);
 
 //Load sprite files and initialize sprites
 static Surface* tank_red_img = new Surface("assets/Tank_Proj2.png");
@@ -46,8 +53,7 @@ static Sprite particle_beam_sprite(particle_beam_img, 3);
 const static vec2 tank_size(7, 9);
 const static vec2 rocket_size(6, 6);
 
-const static float tank_radius = 3.f;
-const static float rocket_radius = 5.f;
+bool rocket_destroyed_this_round = false;
 
 // -----------------------------------------------------------
 // Initialize the simulation state
@@ -56,9 +62,10 @@ const static float rocket_radius = 5.f;
 // -----------------------------------------------------------
 void Game::init()
 {
+
     frame_count_font = new Font("assets/digital_small.png", "ABCDEFGHIJKLMNOPQRSTUVWXYZ:?!=-0123456789.");
 
-    tanks.reserve(num_tanks_blue + num_tanks_red);
+    tanks.reserve(NUM_TANKS_BLUE + NUM_TANKS_RED);
 
     uint max_rows = 24;
 
@@ -70,27 +77,26 @@ void Game::init()
 
     float spacing = 7.5f;
 
+
     //Spawn blue tanks
-    for (int i = 0; i < num_tanks_blue; i++)
+    for (int i = 0; i < NUM_TANKS_BLUE; i++)
     {
         int tank_index = i;
         vec2 position{ start_blue_x + ((i % max_rows) * spacing), start_blue_y + ((i / max_rows) * spacing) };
         Cell* tank_cell = Cell::find_cell_for_tank(position.x, position.y, cells);
-        tanks.push_back(Tank(tank_index, tank_cell->index, position.x, position.y, BLUE, &tank_blue, &smoke, 1100.f, position.y + 16, tank_radius, tank_max_health, tank_max_speed));
+        tanks.push_back(Tank(tank_index, tank_cell->index, position.x, position.y, BLUE, &tank_blue, &smoke, 1100.f, position.y + 16, TANK_RADIUS, TANK_MAX_HEALTH, tank_max_speed));
         tank_cell->tank_indices.push_back(tank_index);
     }
 
     //Spawn red tanks
-    for (int i = 0; i < num_tanks_red; i++)
+    for (int i = 0; i < NUM_TANKS_RED; i++)
     {
-        int tank_index = num_tanks_blue + i;
+        int tank_index = NUM_TANKS_BLUE + i;
         vec2 position{ start_red_x + ((i % max_rows) * spacing), start_red_y + ((i / max_rows) * spacing) };
         Cell* tank_cell = Cell::find_cell_for_tank(position.x, position.y, cells);
-        tanks.push_back(Tank(tank_index, tank_cell->index, position.x, position.y, RED, &tank_red, &smoke, 100.f, position.y + 16, tank_radius, tank_max_health, tank_max_speed));
+        tanks.push_back(Tank(tank_index, tank_cell->index, position.x, position.y, RED, &tank_red, &smoke, 100.f, position.y + 16, TANK_RADIUS, TANK_MAX_HEALTH, tank_max_speed));
         tank_cell->tank_indices.push_back(tank_index);
     }
-
-    outside_cell_indices = Cell::initialize_outside_cell_indices(cells);
 
     particle_beams.push_back(Particle_beam(vec2(590, 327), vec2(100, 50), &particle_beam_sprite, particle_beam_hit_value));
     particle_beams.push_back(Particle_beam(vec2(64, 64), vec2(100, 50), &particle_beam_sprite, particle_beam_hit_value));
@@ -104,179 +110,41 @@ void Game::shutdown()
 {
 }
 
-// -----------------------------------------------------------
-// Iterates through all tanks and returns the closest enemy tank for the given tank
-// @note I can't use the grid system because it always needs to find a new tank.
-// -----------------------------------------------------------
-Tank& Game::find_closest_enemy(Tank& current_tank)
-{
-    float closest_distance = numeric_limits<float>::infinity();
-    int closest_index = 0;
-
-    for (int i = 0; i < tanks.size(); i++)
-    {
-        if (tanks.at(i).allignment != current_tank.allignment && tanks.at(i).active)
-        {
-            float sqr_dist = fabsf((tanks.at(i).get_position() - current_tank.get_position()).sqr_length());
-            if (sqr_dist < closest_distance)
-            {
-                closest_distance = sqr_dist;
-                closest_index = i;
-            }
-        }
-    }
-
-    return tanks.at(closest_index);
-}
-
 void Game::update(float deltaTime)
 {
     //Calculate the route to the destination for each tank using BFS
     //Initializing routes here so it gets counted for performance..
     if (frame_count == 0)
     {
-        for (Tank& t : tanks)
-        {
-            t.set_route(background_terrain.get_route(t, t.target));
-        }
+            for (Tank& t : tanks)
+            {
+                t.set_route(background_terrain.get_route(t, t.target));
+            };
     }
 
     //Update tanks
-
-    // Prepare convex hull calculation
-    forcefield_hull.clear();
-    // Define variable for all active tanks on the outside cells for convex hull calculation.
-    vector<vec2> tank_positions;
-
-    // Loop through active tanks.
-    // @note I can't use the cell grid here because the tanks should be updated in tanks order.
-    for (Tank& tank : tanks) {
-        if (!tank.active) continue;
-
-        //Move tanks according to speed and nudges (see above) also reload
-        tank.tick(background_terrain);
-        // Check if tank is still in the right cell. If not, update it.
-        Cell::check_or_update_cell(tank, cells, outside_cell_indices, tanks);
-    }
-
-    for (Cell& cell : cells) {
-        if (cell.tank_indices.size() == 0) continue;
-
-        for (int tank_index : cell.tank_indices) {
-            Tank& tank = tanks.at(tank_index);
-
-            // Check if tank collided with tanks in surrounding cells, if so, nudge away.
-            check_tank_collision(tank, tanks, cells);
-
-            //Shoot at closest target if reloaded
-            if (tank.rocket_reloaded())
-            {
-                Tank& target = find_closest_enemy(tank);
-
-                rockets.push_back(Rocket(tank.position, (target.get_position() - tank.position).normalized() * 3, rocket_radius, tank.allignment, ((tank.allignment == RED) ? &rocket_red : &rocket_blue)));
-
-                tank.reload_rocket();
-            }
-
-            // See if the current tank is positioned in one of the outside_cells. If so, add their position to tank_positions.
-            // This is to prepare the convex_hull calculation.
-            vector<int>::iterator outside_cell_iterator;
-            outside_cell_iterator = std::find_if(outside_cell_indices.begin(), outside_cell_indices.end(), [cell](int outside_cell_index) { return cell.index == outside_cell_index; });
-            if (outside_cell_iterator != outside_cell_indices.end()) {
-                tank_positions.push_back(tanks.at(tank_index).position);
-            }
-        }
-    }
-
-    //Update smoke plumes
-    for (Smoke& smoke : smokes)
-    {
-        smoke.tick();
-    }
+    cout << "Update tanks ";
+    Game::update_tanks(rocket_red, rocket_blue, pool);
+    pool.wait_for_tasks();
 
     // Calculate convex hull for 'rocket barrier' with the tank_positions collected before.
     // Using the Graham scan algorithm.
+    forcefield_hull.clear();
     forcefield_hull = convex_hull(tank_positions);
+    
+    // Update rockets
+    cout << "Update rockets ";
+    Game::update_rockets(smoke, explosion, pool);
+    pool.wait_for_tasks();
 
-    //Update rockets
-    for (Rocket& rocket : rockets)
-    {
-        rocket.tick();
-
-        // Find surrounding cells.
-        int rocket_col = rocket.position.x / CELL_WIDTH;
-        int rocket_row = rocket.position.y / CELL_HEIGHT;
-        // Using the same function as for tanks, but now given the rocket position.
-        vector<Cell> surrounding_rocket_cells = find_surrounding_cells(rocket_col, rocket_row, cells);
-
-        //Check if rocket collides with enemy tank, spawn explosion, and if tank is destroyed spawn a smoke plume
-        for (const Cell& surrounding_rocket_cell : surrounding_rocket_cells) {
-            for (int tank_index : surrounding_rocket_cell.tank_indices) {
-                Tank& tank = tanks.at(tank_index);
-
-                if ((tank.allignment != rocket.allignment) && rocket.intersects(tank.position, tank.collision_radius))
-                {
-                    explosions.push_back(Explosion(&explosion, tank.position));
-
-                    if (tank.hit(rocket_hit_value))
-                    {
-                        smokes.push_back(Smoke(smoke, tank.position - vec2(7, 24)));
-                    }
-
-                    if (!tank.active) {
-                        Cell::remove_tank_from_cell(tank.index, tank.cell_index, cells, outside_cell_indices);
-                    }
-
-                    rocket.active = false;
-                    break;
-                }
-            }
-        }
-    }
-
-    //Disable rockets if they collide with the "forcefield".
-    for (Rocket& rocket : rockets)
-    {
-        if (rocket.active)
-        {
-            for (size_t i = 0; i < forcefield_hull.size(); i++)
-            {
-                if (circle_segment_intersect(forcefield_hull.at(i), forcefield_hull.at((i + 1) % forcefield_hull.size()), rocket.position, rocket.collision_radius))
-                {
-                    explosions.push_back(Explosion(&explosion, rocket.position));
-                    rocket.active = false;
-                }
-            }
-        }
-    }
-
-    //Remove exploded rockets with remove erase idiom
-    rockets.erase(std::remove_if(rockets.begin(), rockets.end(), [](const Rocket& rocket) { return !rocket.active; }), rockets.end());
-
+    cout << "Update particle beams ";
     //Update particle beams
-    for (Particle_beam& particle_beam : particle_beams)
-    {
-        particle_beam.tick(tanks);
+    Game::update_particle_beams(smoke);
 
-        //Damage all tanks within the damage window of the beam (the window is an axis-aligned bounding box)
-        // Iterate through all cells and their tanks.
-        for (Cell& cell : cells) {
-            for (int tank_index : cell.tank_indices) {
-                Tank& tank = tanks.at(tank_index);
-
-                if (particle_beam.rectangle.intersects_circle(tank.get_position(), tank.get_collision_radius()))
-                {
-                    if (tank.hit(particle_beam.damage))
-                    {
-                        smokes.push_back(Smoke(smoke, tank.position - vec2(0, 48)));
-                    }
-
-                    // If tank is no longer active, remove from cell.
-                    if (!tank.active) {
-                        Cell::remove_tank_from_cell(tank.index, tank.cell_index, cells, outside_cell_indices);
-                    }
-                }
-            }
+    //Update smoke plumes
+    for (Smoke& smoke : smokes) {
+        {
+            smoke.tick();
         }
     }
 
@@ -287,6 +155,21 @@ void Game::update(float deltaTime)
     }
 
     explosions.erase(std::remove_if(explosions.begin(), explosions.end(), [](const Explosion& explosion) { return explosion.done(); }), explosions.end());
+
+    cout << "Remove rockets ";
+    if (rocket_destroyed_this_round) {
+        //Remove exploded rockets with remove erase idiom
+        rockets.erase(std::remove_if(rockets.begin(), rockets.end(), [](const Rocket& rocket) { return !rocket.active; }), rockets.end());
+    }
+
+    cout << "Remove inactive tanks ";
+    // Remove inactive tanks from cell
+    for (int tank_index : inactive_tank_indices) {
+        Tank& tank = tanks[tank_index];
+        Cell::remove_tank_from_cell(tank, cells);
+    }
+
+    cout << "End" << endl;
 }
 
 // -----------------------------------------------------------
@@ -304,7 +187,7 @@ void Game::draw()
     //Draw convex hull or cells placeholder
 
     //Draw sprites
-    for (int i = 0; i < num_tanks_blue + num_tanks_red; i++)
+    for (int i = 0; i < NUM_TANKS_BLUE + NUM_TANKS_RED; i++)
     {
         tanks.at(i).draw(screen);
 
@@ -331,65 +214,9 @@ void Game::draw()
         explosion.draw(screen);
     }
 
-    //Draw sorted health bars
-    vector<int> team_healths;
-    for (int team = 0; team < 2; team++)
-    {
-        team_healths.clear();
-
-        // Fill team_healths with the health of current team.
-        if (team == 0) {
-            team_healths.reserve(num_tanks_blue);
-            for (auto it = tanks.begin(); it != tanks.begin() + num_tanks_blue; ++it) {
-                if (it->active) { team_healths.emplace_back(it->health); }
-            }
-        }
-        else {
-            team_healths.reserve(num_tanks_red);
-            for (auto it = tanks.begin() + num_tanks_blue; it != tanks.end(); ++it) {
-                if (it->active) { team_healths.emplace_back(it->health); }
-            }
-        }
-
-        // Sort, not using sort_by_tank_health anymore because performance is not as good.
-        // O(n*2) Worst case. 04:18m
-        //sort_tanks_by_health(team_healths, 0, team_healths.size() - 1);
-
-        // O(n log(n)) Worst case. 04:03m
-        // The sort() function uses a 3 fold hybrid sorting technique named Introsort. It is a combination of Quick Sort, Heap Sort, and Insertion Sort
-        sort(team_healths.begin(), team_healths.end());
-        draw_health_bars(team_healths, team);
-    }
-}
-
-// -----------------------------------------------------------
-// Draw the health bars based on the given tanks health values
-// -----------------------------------------------------------
-void Tmpl8::Game::draw_health_bars(const std::vector<int>& sorted_healths, const int team)
-{
-    int health_bar_start_x = (team < 1) ? 0 : (SCRWIDTH - HEALTHBAR_OFFSET) - 1;
-    int health_bar_end_x = (team < 1) ? health_bar_width : health_bar_start_x + health_bar_width - 1;
-
-    for (int i = 0; i < SCRHEIGHT - 1; i++)
-    {
-        //Health bars are 1 pixel each
-        int health_bar_start_y = i * 1;
-        int health_bar_end_y = health_bar_start_y + 1;
-
-        screen->bar(health_bar_start_x, health_bar_start_y, health_bar_end_x, health_bar_end_y, REDMASK);
-    }
-
-    //Draw the <SCRHEIGHT> least healthy tank health bars
-    int draw_count = std::min(SCRHEIGHT, (int)sorted_healths.size());
-    for (int i = 0; i < draw_count - 1; i++)
-    {
-        //Health bars are 1 pixel each
-        int health_bar_start_y = i * 1;
-        int health_bar_end_y = health_bar_start_y + 1;
-        float health_fraction = (1 - ((double)sorted_healths.at(i) / (double)tank_max_health));
-
-        if (team == 0) { screen->bar(health_bar_start_x + (int)((double)health_bar_width * health_fraction), health_bar_start_y, health_bar_end_x, health_bar_end_y, GREENMASK); }
-        else { screen->bar(health_bar_start_x, health_bar_start_y, health_bar_end_x - (int)((double)health_bar_width * health_fraction), health_bar_end_y, GREENMASK); }
+    // Draw the health bars with two threads.
+    for (int team = 0; team < 2; team++) {
+        initialize_team_health_bar(tanks, team, screen);
     }
 }
 
@@ -409,6 +236,20 @@ void Tmpl8::Game::measure_performance()
             duration = perf_timer.elapsed();
             cout << "Duration was: " << duration << " (Replace REF_PERFORMANCE with this value)" << endl;
             lock_update = true;
+
+            //int totalTime = 0;
+            //for (int time : times) {
+            //    totalTime = totalTime + time;
+            //}
+
+            //int average = totalTime / times.size();
+            //cout << "Duration of timed window is on average: " << average << " milliseconds" << endl;
+
+            //auto t1 = high_resolution_clock::now();
+            //pool.wait_for_tasks();
+            //auto t2 = high_resolution_clock::now();
+            //auto ms_int = duration_cast<milliseconds>(t2 - t1);
+            //times.push_back(ms_int.count());
         }
 
         frame_count--;

@@ -1,10 +1,11 @@
 #include "precomp.h" // include (only) this in every .cpp file
 
-void check_tank_collision(Tank& current_tank, vector<Tank>& tanks, vector<Cell>& cells) {
+void Game::check_tank_collision(Tank& current_tank) {
     // Find the cell the tank is currently in.
     Cell& tank_cell = cells.at(current_tank.cell_index);
     // Find the surrounding cells.
-    vector<Cell> surrounding_cells = find_surrounding_cells(tank_cell.column, tank_cell.row, cells);
+    vector<Cell> surrounding_cells = Game::find_surrounding_cells(tank_cell.column, tank_cell.row);
+
 
     // Iterate through the current and surrounding cells.
     for (Cell& cell : surrounding_cells)
@@ -28,7 +29,7 @@ void check_tank_collision(Tank& current_tank, vector<Tank>& tanks, vector<Cell>&
     }
 }
 
-vector<Cell> find_surrounding_cells(int col, int row, vector<Cell>& cells)
+vector<Cell> Game::find_surrounding_cells(int col, int row)
 {
     vector<Cell> surrounding_cells;
 
