@@ -5,19 +5,14 @@ constexpr auto particle_beam_hit_value = 50;
 constexpr auto tank_max_speed = 1.0;
 constexpr auto max_frames = 2000;
 
-// TODO'S
-// Create global mutex variables in game_h.
-// Mutex all places where in threads a vector is changed.
-// Make the reload tank method more threadable without a lock around the whole block. Possibly only needed for the vector push_back.
-
-
 // Global performance timer
 // Start: 5.23m, speedup 0.4, 323866
 // Grid collision (cells): 4.40m, speedup 1.2, 280300
 // Tank health bar sort: 4:24m, speedup 1.1, 264179
 // Convex hull: 4:24, speedup 1.0, 2649889
 // Rocket collision (cells): 4:09, speedup: 1.0, 249488
-// Added threads to tank: 3:12 speedup 1.3, 192187
+// Added threads to tank & rockets: 3:12 speedup 1.3, 192187
+// Specified mutexes: 3:02 speedup 1.1, 182514
 
 // Tank update threaded, 300 frames: 61ms
 // Tank update unthreaded, 300 frames: 90ms
@@ -25,8 +20,9 @@ constexpr auto max_frames = 2000;
 // Rocket update threaded, 300 frames: 43ms
 // Rocket update unthreaded, 300 frames: 51ms
 
+// @note: Decided to not implement more threading because most places require a lock for changing vectors which does not improve speed.
 
-constexpr auto REF_PERFORMANCE = 249488; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
+constexpr auto REF_PERFORMANCE = 192187; //UPDATE THIS WITH YOUR REFERENCE PERFORMANCE (see console after 2k frames)
 static timer perf_timer;
 static float duration;
 
@@ -62,7 +58,6 @@ bool rocket_destroyed_this_round = false;
 // -----------------------------------------------------------
 void Game::init()
 {
-
     frame_count_font = new Font("assets/digital_small.png", "ABCDEFGHIJKLMNOPQRSTUVWXYZ:?!=-0123456789.");
 
     tanks.reserve(NUM_TANKS_BLUE + NUM_TANKS_RED);
@@ -122,24 +117,69 @@ void Game::update(float deltaTime)
             };
     }
 
-    //Update tanks
-    cout << "Update tanks ";
-    Game::update_tanks(rocket_red, rocket_blue, pool);
+    // ---- START updating tanks ----
+    tank_positions.clear();
+    inactive_tank_indices.clear();
+
+    std::size_t tanks_size = tanks.size();
+    std::size_t number_of_threads_for_tanks = 4;
+    std::size_t tanks_per_thread = tanks_size / number_of_threads_for_tanks;
+    for (int thread_index = 0; thread_index < number_of_threads_for_tanks; ++thread_index) {
+        std::size_t start_index = thread_index * tanks_per_thread;
+        std::size_t end_index = (thread_index == number_of_threads_for_tanks - 1) ? tanks_size : (thread_index + 1) * tanks_per_thread;
+
+        pool.push_task([=] {
+            Game::update_tank(start_index, end_index);
+        });
+    }
+
     pool.wait_for_tasks();
+
+    vector<int> outside_cells = Cell::initialize_outside_cell_indices(cells);
+
+    for (int thread_index = 0; thread_index < number_of_threads_for_tanks; ++thread_index) {
+        std::size_t start_index = thread_index * tanks_per_thread;
+        std::size_t end_index = (thread_index == number_of_threads_for_tanks - 1) ? tanks_size : (thread_index + 1) * tanks_per_thread;
+
+        pool.push_task([=, &outside_cells] {
+            Game::run_tank_collision(start_index, end_index, outside_cells, rocket_red, rocket_blue);
+        });
+    }
+
+    pool.wait_for_tasks();
+
+    // ---- END updating tanks ----
+
 
     // Calculate convex hull for 'rocket barrier' with the tank_positions collected before.
     // Using the Graham scan algorithm.
     forcefield_hull.clear();
     forcefield_hull = convex_hull(tank_positions);
     
-    // Update rockets
-    cout << "Update rockets ";
-    Game::update_rockets(smoke, explosion, pool);
-    pool.wait_for_tasks();
+    // ---- START updating rockets ----
+    rocket_destroyed_this_round = false;
 
-    cout << "Update particle beams ";
+    std::size_t rockets_size = rockets.size();
+    std::size_t number_of_threads_for_rockets = rockets_size < 5000 ? 2 : 4;
+    std::size_t rockets_per_thread = rockets_size / number_of_threads_for_rockets;
+
+    for (int thread_index = 0; thread_index < number_of_threads_for_rockets; ++thread_index) {
+        std::size_t start_index = thread_index * rockets_per_thread;
+        std::size_t end_index = (thread_index == number_of_threads_for_rockets - 1) ? rockets_size : (thread_index + 1) * rockets_per_thread;
+
+        pool.push_task([=] {
+            update_rocket(explosion, smoke, start_index, end_index);
+        });
+    }
+
+    pool.wait_for_tasks();
+    // ---- END updating rockets ----
+
     //Update particle beams
-    Game::update_particle_beams(smoke);
+    for (Particle_beam& particle_beam : particle_beams)
+    {
+        Game::update_particle_beam(particle_beam, smoke);
+    }
 
     //Update smoke plumes
     for (Smoke& smoke : smokes) {
@@ -156,20 +196,16 @@ void Game::update(float deltaTime)
 
     explosions.erase(std::remove_if(explosions.begin(), explosions.end(), [](const Explosion& explosion) { return explosion.done(); }), explosions.end());
 
-    cout << "Remove rockets ";
     if (rocket_destroyed_this_round) {
         //Remove exploded rockets with remove erase idiom
         rockets.erase(std::remove_if(rockets.begin(), rockets.end(), [](const Rocket& rocket) { return !rocket.active; }), rockets.end());
     }
 
-    cout << "Remove inactive tanks ";
     // Remove inactive tanks from cell
     for (int tank_index : inactive_tank_indices) {
         Tank& tank = tanks[tank_index];
         Cell::remove_tank_from_cell(tank, cells);
     }
-
-    cout << "End" << endl;
 }
 
 // -----------------------------------------------------------
@@ -216,8 +252,11 @@ void Game::draw()
 
     // Draw the health bars with two threads.
     for (int team = 0; team < 2; team++) {
-        initialize_team_health_bar(tanks, team, screen);
+        pool.push_task([this, team] {
+            initialize_team_health_bar(tanks, team, screen);
+        });
     }
+    pool.wait_for_tasks();
 }
 
 
@@ -236,20 +275,6 @@ void Tmpl8::Game::measure_performance()
             duration = perf_timer.elapsed();
             cout << "Duration was: " << duration << " (Replace REF_PERFORMANCE with this value)" << endl;
             lock_update = true;
-
-            //int totalTime = 0;
-            //for (int time : times) {
-            //    totalTime = totalTime + time;
-            //}
-
-            //int average = totalTime / times.size();
-            //cout << "Duration of timed window is on average: " << average << " milliseconds" << endl;
-
-            //auto t1 = high_resolution_clock::now();
-            //pool.wait_for_tasks();
-            //auto t2 = high_resolution_clock::now();
-            //auto ms_int = duration_cast<milliseconds>(t2 - t1);
-            //times.push_back(ms_int.count());
         }
 
         frame_count--;

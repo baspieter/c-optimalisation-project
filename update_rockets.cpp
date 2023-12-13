@@ -1,26 +1,6 @@
 #include "precomp.h" // include (only) this in every .cpp file
 
-void Game::update_rockets(Sprite& smoke, Sprite& explosion, BS::thread_pool& pool) {
-    rocket_destroyed_this_round = false;
-
-    mutex mutex;
-    std::size_t rockets_size = rockets.size();
-    std::size_t number_of_threads = rockets_size < 5000 ? 2 : 4;
-    std::size_t rockets_per_thread = rockets_size / number_of_threads;
-
-    for (int thread_index = 0; thread_index < number_of_threads; ++thread_index) {
-        std::size_t start_index = thread_index * rockets_per_thread;
-        std::size_t end_index = (thread_index == number_of_threads - 1) ? rockets_size : (thread_index + 1) * rockets_per_thread;
-
-        pool.push_task([=, &explosion, &smoke, &mutex] {
-            update_rocket(explosion, smoke, start_index, end_index, mutex);
-        });
-    }
-
-    pool.wait_for_tasks();
-}
-
-void Game::update_rocket(Sprite& explosion, Sprite& smoke, int start_index, int end_index, mutex& mutex) {
+void Game::update_rocket(Sprite& explosion, Sprite& smoke, int start_index, int end_index) {
     for (std::size_t j = start_index; j < end_index; ++j) {
         Rocket& rocket = rockets[j];
 
@@ -42,14 +22,19 @@ void Game::update_rocket(Sprite& explosion, Sprite& smoke, int start_index, int 
 
                 if ((tank.allignment != rocket.allignment) && rocket.intersects(tank.position, tank.collision_radius))
                 {
-                    explosions.push_back(Explosion(&explosion, tank.position));
+                    {
+                        std::lock_guard<std::mutex> lock(tank_explosion_mutex);
+                        explosions.push_back(Explosion(&explosion, tank.position));
+                    }
 
                     if (tank.hit(ROCKET_HIT_VALUE))
                     {
+                        std::lock_guard<std::mutex> lock(smokes_mutex);
                         smokes.push_back(Smoke(smoke, tank.position - vec2(7, 24)));
                     }
 
                     if (!tank.active) {
+                        std::lock_guard<std::mutex> lock(inactive_tanks_mutex);
                         inactive_tank_indices.push_back(tank.index);
                     }
                     else {
@@ -57,6 +42,7 @@ void Game::update_rocket(Sprite& explosion, Sprite& smoke, int start_index, int 
                         {
                             if (circle_segment_intersect(forcefield_hull.at(i), forcefield_hull.at((i + 1) % forcefield_hull.size()), rocket.position, rocket.collision_radius))
                             {
+                                std::lock_guard<std::mutex> lock(rocket_explosion_mutex);
                                 explosions.push_back(Explosion(&explosion, rocket.position));
                                 rocket.active = false;
                             }
@@ -65,7 +51,7 @@ void Game::update_rocket(Sprite& explosion, Sprite& smoke, int start_index, int 
 
                     rocket.active = false;
                     {
-                        std::lock_guard<std::mutex> lock(mutex);
+                        std::lock_guard<std::mutex> lock(destroyed_rockets_mutex);
                         if (!rocket_destroyed_this_round) rocket_destroyed_this_round = true;
                     }
                     break;

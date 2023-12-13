@@ -20,21 +20,18 @@ class Game
     void measure_performance();
 
     // Tank update
-    void update_tanks(Sprite& rocket_red, Sprite& rocket_blue, BS::thread_pool& pool);
     Tank& find_closest_enemy(Tank& current_tank);
     void check_tank_collision(Tank& current_tank);
-    void run_tank_collision(int start_index, int end_index, vector<int>& outside_cells, Sprite& rocket_red, Sprite& rocket_blue, mutex& mutex2, mutex& mutex);
-    vector<int> get_tank_indices(Cell& cell, mutex& mutex);
-    void update_tank(int start_index, int end_index, mutex& mutex);
-    Tank& set_tank_target(Tank& tank, mutex& mutex);
+    void run_tank_collision(int start_index, int end_index, vector<int>& outside_cells, Sprite& rocket_red, Sprite& rocket_blue);
+    vector<int> get_tank_indices(Cell& cell);
+    void update_tank(int start_index, int end_index);
+    Tank& set_tank_target(Tank& tank);
 
     // Rocket update
-    void update_rockets(Sprite& smoke, Sprite& explosion, BS::thread_pool& pool);
-    void update_rocket(Sprite& explosion, Sprite& smoke, int start_index, int end_index, mutex& mutex);
+    void update_rocket(Sprite& explosion, Sprite& smoke, int start_index, int end_index);
 
 
     // Update particle beams
-    void update_particle_beams(Sprite& smoke);
     void update_particle_beam(Particle_beam& particle_beam, Sprite& smoke);
 
     // Helper methods
@@ -71,7 +68,6 @@ class Game
     vector<Cell> cells;
     vector<vec2> tank_positions;
     vector<int> inactive_tank_indices;
-    //vector<int> times;
 
     Terrain background_terrain;
     vector<vec2> forcefield_hull;
@@ -82,6 +78,16 @@ class Game
     bool rocket_destroyed_this_round = false;
 
     bool lock_update = false;
+
+    // Mutex declarations
+    mutex update_cell_mutex;
+    mutex destroyed_rockets_mutex;
+    mutex rocket_reload_mutex;
+    mutex tank_positions_mutex;
+    mutex tank_explosion_mutex;
+    mutex rocket_explosion_mutex;
+    mutex smokes_mutex;
+    mutex inactive_tanks_mutex;
 };
 
 }; // namespace Tmpl8

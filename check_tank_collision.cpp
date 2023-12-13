@@ -54,6 +54,7 @@ vector<Cell> Game::find_surrounding_cells(int col, int row)
         vector<Cell>::iterator cell_iterator;
         cell_iterator = std::find_if(cells.begin(), cells.end(), [&tank_col, &tank_row](Cell& cell) { return cell.column == tank_col && cell.row == tank_row; });
         if (cell_iterator != cells.end()) {
+            // @note: This does not require a mutex, because it's not an global vector. Just within the thread. So it can't be updated at the same time.
             surrounding_cells.push_back((*cell_iterator));
         }
 

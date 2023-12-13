@@ -51,6 +51,7 @@ namespace Tmpl8
 
     void Cell::remove_tank_from_cell(Tank& tank, vector<Cell>& cells)
     {
+
         Cell& cell = cells.at(tank.cell_index);
         cell.tank_indices.erase(std::remove(cell.tank_indices.begin(), cell.tank_indices.end(), tank.index), cell.tank_indices.end());
 

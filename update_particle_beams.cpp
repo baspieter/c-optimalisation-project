@@ -1,13 +1,5 @@
 #include "precomp.h" // include (only) this in every .cpp file
 
-void Game::update_particle_beams(Sprite& smoke) {
-    for (Particle_beam& particle_beam : particle_beams)
-    {
-        Game::update_particle_beam(particle_beam, smoke);
-    }
-}
-
-
 void Game::update_particle_beam(Particle_beam& particle_beam, Sprite& smoke) {
     particle_beam.tick(tanks);
 
@@ -22,11 +14,13 @@ void Game::update_particle_beam(Particle_beam& particle_beam, Sprite& smoke) {
             {
                 if (tank.hit(particle_beam.damage))
                 {
+                    std::lock_guard<std::mutex> lock(smokes_mutex);
                     smokes.push_back(Smoke(smoke, tank.position - vec2(0, 48)));
                 }
 
                 // If tank is no longer active, remove from cell.
                 if (!tank.active) {
+                    std::lock_guard<std::mutex> lock(inactive_tanks_mutex);
                     inactive_tank_indices.push_back(tank.index);
                 }
             }
